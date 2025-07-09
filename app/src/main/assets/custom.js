@@ -1,4 +1,4 @@
-// 卡密购买弹窗 - 会话限弹2次版
+// 卡密购买弹窗 - 简化版（激活仅跳转）
 (function() {
     // 1. 域名和路径判断 - 仅在zyhsktzz.xyz首页注入
     const currentHost = window.location.hostname;
@@ -89,6 +89,7 @@
                     ×
                 </button>
                 
+                <!-- 购买链接区域（仅复制不跳转） -->
                 <div style="margin: 24px 0 20px;">
                     <div style="
                         background: #f3f4f6;
@@ -124,39 +125,27 @@
                     ">
                         复制购买链接
                     </button>
+                    <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
+                        复制后请手动粘贴到浏览器地址栏打开
+                    </div>
                 </div>
-                <button id="pake-open-btn" style="
-                    background: #3b82f6;
-                    color: white;
-                    border: none;
-                    padding: 14px 16px;
-                    font-size: 18px;
-                    border-radius: 8px;
-                    cursor: pointer;
-                    width: 100%;
-                    font-weight: 600;
-                    box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.4);
-                ">
-                    立即前往购买
-                </button>
                 
-                <!-- 激活卡密按钮 -->
-                <button id="pake-activate-btn" style="
-                    background: transparent;
-                    border: none;
-                    color: #8b5cf6;
-                    font-size: 16px;
-                    cursor: pointer;
-                    padding: 8px 0;
-                    margin: 12px 0;
-                    font-weight: 500;
-                    text-decoration: underline;
-                ">
-                    已购买？点击此处激活卡密
-                </button>
-                
-                <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
-                    点击上方按钮获取卡密激活软件 
+                <!-- 激活链接区域（仅跳转） -->
+                <div style="margin: 16px 0;">
+                    <button id="pake-activate-btn" style="
+                        background: #8b5cf6;
+                        color: white;
+                        border: none;
+                        padding: 14px 16px;
+                        font-size: 18px;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        width: 100%;
+                        font-weight: 600;
+                        box-shadow: 0 4px 6px -1px rgba(139, 92, 246, 0.4);
+                    ">
+                        点击此处激活卡密
+                    </button>
                 </div>
             </div>
         `;
@@ -177,94 +166,63 @@
         const closeBtn = popup.querySelector('#pake-close-btn');
         closeBtn.addEventListener('click', () => {
             closePopup();
-            incrementPopupCount(); // 记录关闭操作
+            incrementPopupCount();
         });
         
-        // 复制功能
+        // 复制购买链接功能
         const copyBtn = popup.querySelector('#pake-copy-btn');
         const urlInput = popup.querySelector('#pake-url-input');
         copyBtn.addEventListener('click', () => {
-            urlInput.select();
-            
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(BUY_URL)
-                    .then(() => showToast('链接已复制到剪贴板'))
-                    .catch(err => {
-                        console.error('复制失败:', err);
-                        showToast('复制失败，请手动复制');
-                    });
-            } else {
-                const successful = document.execCommand('copy');
-                showToast(successful ? '链接已复制到剪贴板' : '复制失败，请手动复制');
-            }
-            
+            copyToClipboard(BUY_URL, '购买链接');
             copyBtn.style.backgroundColor = '#10b981';
             setTimeout(() => {
                 copyBtn.style.backgroundColor = '#48bb78';
             }, 300);
         });
         
-        // 购买按钮点击（外部浏览器打开）
-        const openBtn = popup.querySelector('#pake-open-btn');
-        openBtn.addEventListener('click', () => {
-            openExternalUrl(BUY_URL);
-            openBtn.style.backgroundColor = '#2563eb';
-            setTimeout(() => {
-                openBtn.style.backgroundColor = '#3b82f6';
-            }, 300);
-            incrementPopupCount(); // 记录购买操作
-        });
-        
-        // 激活卡密按钮点击（关闭弹窗+当前页跳转）
+        // 激活卡密按钮点击（关闭弹窗+跳转）
         const activateBtn = popup.querySelector('#pake-activate-btn');
         activateBtn.addEventListener('click', () => {
+            // 1. 先关闭弹窗
             closePopup();
+            
+            // 2. 弹窗动画结束后执行跳转
             setTimeout(() => {
                 window.location.href = ACTIVATE_URL;
             }, 300);
             
-            activateBtn.style.opacity = '0.7';
+            // 按钮反馈
+            activateBtn.style.backgroundColor = '#7c3aed';
             setTimeout(() => {
-                activateBtn.style.opacity = '1';
+                activateBtn.style.backgroundColor = '#8b5cf6';
             }, 300);
-            incrementPopupCount(); // 记录激活操作
+            incrementPopupCount();
         });
         
-        // 外部链接打开函数
-        function openExternalUrl(url) {
-            if (window.__TAURI__) {
-                window.__TAURI__.shell.open(url).catch(err => {
-                    console.error('TAURI打开失败:', err);
-                    fallbackOpen(url);
-                });
-            } else if (window.android && typeof window.android.openUrl === 'function') {
-                try {
-                    window.android.openUrl(url);
-                } catch (err) {
-                    console.error('Android打开失败:', err);
-                    fallbackOpen(url);
-                }
-            } else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.openUrl) {
-                try {
-                    window.webkit.messageHandlers.openUrl.postMessage(url);
-                } catch (err) {
-                    console.error('iOS打开失败:', err);
-                    fallbackOpen(url);
-                }
+        // 复制到剪贴板通用函数
+        function copyToClipboard(text, type) {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text)
+                    .then(() => showToast(`${type}已复制到剪贴板`))
+                    .catch(err => {
+                        console.error('复制失败:', err);
+                        showToast('复制失败，请长按链接手动复制');
+                    });
             } else {
-                fallbackOpen(url);
-            }
-        }
-        
-        // 外部链接打开降级方案
-        function fallbackOpen(url) {
-            try {
-                const newWindow = window.open(url, '_blank');
-                if (newWindow) newWindow.focus();
-                else window.location.href = url;
-            } catch (err) {
-                console.error('打开失败:', err);
-                showToast('无法打开链接，请手动复制');
+                // 降级方案
+                try {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.style.position = 'fixed';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    showToast(`${type}已复制到剪贴板`);
+                } catch (err) {
+                    console.error('复制失败:', err);
+                    showToast('复制失败，请长按链接手动复制');
+                }
             }
         }
         
@@ -303,7 +261,7 @@
         }
         
         // 触摸反馈
-        [copyBtn, openBtn, closeBtn, activateBtn].forEach(element => {
+        [copyBtn, closeBtn, activateBtn].forEach(element => {
             element.addEventListener('touchstart', () => {
                 element.style.transform = 'scale(0.95)';
                 element.style.opacity = '0.8';
@@ -317,7 +275,6 @@
     
     // 页面加载完成后在首页显示弹窗
     if (isTargetHomepage) {
-        // 显示弹窗前先增加计数
         console.log(`显示弹窗 ${popupCount + 1}/${POPUP_LIMIT}`);
         
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
@@ -326,7 +283,6 @@
             window.addEventListener('load', createAuthPopup);
         }
         
-        // 更新计数（无论用户是否操作，只要显示就算一次）
         incrementPopupCount();
     }
 })();
