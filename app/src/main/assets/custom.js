@@ -1,402 +1,332 @@
-// 超轻量手机导航脚本（修复版）
+// 卡密购买弹窗 - 会话限弹2次版
 (function() {
-    // 配置项
-    const CONFIG = {
-        buttonSize: '43px',
-        buttonColor: '#2c3e50',
-        buttonRadius: '50%',
-        buttonSpacing: '8px',
-        menuBgColor: 'rgba(0,0,0,0.9)',
-        animationDuration: '0.3s',
-    };
-
-    const CUSTOM_HOME_URL = "http://zyhsktzz.xyz";
-
-    // 配置常用网址（已移除主页项）
-    const PRESET_URLS = [
-        { name: "卡密购买", url: "https://918.pouir.cn/links/F2F1A946", icon: "🎫" },
-        { name: "作者QQ:3997823644", icon: "🐧" },
-    ];
-
-    // 创建按钮
-    function createButton(icon, title, onClick) {
-        const btn = document.createElement('button');
-        btn.innerHTML = icon;
-        btn.title = title;
-        btn.style.cssText = `
-            width: ${CONFIG.buttonSize};
-            height: ${CONFIG.buttonSize};
-            border-radius: ${CONFIG.buttonRadius};
-            background-color: ${CONFIG.buttonColor};
-            color: white;
-            border: none;
-            font-size: 20px;
-            margin: 0 ${CONFIG.buttonSpacing};
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-            touch-action: manipulation;
-        `;
-        btn.addEventListener('click', onClick);
-        return btn;
+    // 1. 域名和路径判断 - 仅在zyhsktzz.xyz首页注入
+    const currentHost = window.location.hostname;
+    const currentPath = window.location.pathname;
+    
+    // 验证是否为目标域名的首页
+    const isTargetHomepage = 
+        currentHost === 'zyhsktzz.xyz' &&  // 匹配域名
+        (currentPath === '/' || currentPath === '');  // 匹配首页路径
+    
+    // 如果不是目标首页，直接退出
+    if (!isTargetHomepage) {
+        console.log('非目标首页，不注入弹窗');
+        return;
     }
 
-    // 创建菜单
-    function createMenu() {
-        const menu = document.createElement('div');
-        menu.id = 'nav-menu';
-        menu.style.cssText = `
+    // 2. 会话内弹窗计数逻辑
+    const POPUP_LIMIT = 2; // 限制弹窗次数
+    const STORAGE_KEY = 'popup_counter';
+    
+    // 读取会话内已弹窗次数
+    let popupCount = parseInt(sessionStorage.getItem(STORAGE_KEY) || '0');
+    
+    // 如果已达到限制次数，不再显示弹窗
+    if (popupCount >= POPUP_LIMIT) {
+        console.log(`本次会话已达到弹窗次数限制(${POPUP_LIMIT}次)，不再显示`);
+        return;
+    }
+
+    // 防止重复注入
+    if (window.__PAKE_KEY_POPUP__) return;
+    window.__PAKE_KEY_POPUP__ = true;
+
+    // 购买链接和激活链接
+    const BUY_URL = "https://918.pouir.cn/links/F2F1A946";
+    const ACTIVATE_URL = "http://zyhsktzz.xyz/member/card_pwd.html";
+    
+    // 创建弹窗
+    function createAuthPopup() {
+        const popup = document.createElement('div');
+        popup.id = 'pake-key-popup';
+        popup.style.cssText = `
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: ${CONFIG.menuBgColor};
-            z-index: 10000;
-            transform: translateY(-100%);
-            transition: transform ${CONFIG.animationDuration} ease;
-            overflow-y: auto;
-        `;
-
-        // 修复：使用箭头函数确保this指向正确
-        const closeBtn = createButton('×', '关闭', () => {
-            toggleMenu();
-        });
-        
-        closeBtn.style.cssText += `
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            background-color: rgba(255,255,255,0.1);
-        `;
-        menu.appendChild(closeBtn);
-
-        const title = document.createElement('div');
-        title.style.cssText = `
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 999999;
             padding: 20px;
-            color: white;
-            font-size: 18px;
-            font-weight: bold;
-            margin-top: 20px;
+            box-sizing: border-box;
+            backdrop-filter: blur(2px);
+            transition: opacity 0.3s ease;
         `;
-        title.textContent = '常用网址';
-        menu.appendChild(title);
-
-        PRESET_URLS.forEach(item => {
-            if (!item.url) return; // 跳过没有URL的项
-
-            // 创建链接项容器
-            const linkContainer = document.createElement('div');
-            linkContainer.style.cssText = `
-                display: flex;
-                flex-direction: column;
-            `;
-
-            // 主链接项
-            const urlItem = document.createElement('div');
-            urlItem.style.cssText = `
-                padding: 18px 20px;
-                color: white;
-                border-bottom: 1px solid rgba(255,255,255,0.1);
-                font-size: 16px;
-                display: flex;
-                align-items: center;
-                cursor: pointer;
-            `;
-            urlItem.innerHTML = `<span style="margin-right: 15px;">${item.icon}</span>${item.name}`;
-            
-            // 点击事件 - 尝试跳转并处理失败
-            urlItem.addEventListener('click', () => {
-                toggleMenu(); // 修复：确保点击链接后关闭菜单
-                attemptToOpenUrl(item.url, item.name);
-            });
-            
-            linkContainer.appendChild(urlItem);
-
-            // 复制链接按钮
-            const copyBtn = document.createElement('div');
-            copyBtn.style.cssText = `
-                padding: 8px 20px;
-                color: #aaa;
-                font-size: 14px;
-                display: flex;
-                align-items: center;
-                cursor: pointer;
-                border-bottom: 1px solid rgba(255,255,255,0.1);
-            `;
-            copyBtn.innerHTML = `<span style="margin-right: 10px;">📋</span>复制链接`;
-            
-            copyBtn.addEventListener('click', () => {
-                copyToClipboard(item.url);
-                showToast(`已复制"${item.name}"的链接`);
-                toggleMenu(); // 修复：确保点击复制后关闭菜单
-            });
-            
-            linkContainer.appendChild(copyBtn);
-
-            menu.appendChild(linkContainer);
-        });
-
-        // 修复：添加背景遮罩点击关闭功能
-        const overlay = document.createElement('div');
-        overlay.style.cssText = `
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -1;
-        `;
-        overlay.addEventListener('click', toggleMenu);
-        menu.appendChild(overlay);
-
-        return menu;
-    }
-
-    // 切换菜单显示状态
-    function toggleMenu() {
-        const menu = document.getElementById('nav-menu');
-        if (menu) {
-            // 修复：使用更可靠的transform检测
-            if (menu.style.transform === 'translateY(0px)' || menu.style.transform === '') {
-                menu.style.transform = 'translateY(-100%)';
-            } else {
-                menu.style.transform = 'translateY(0)';
-            }
-        }
-    }
-
-    // 尝试打开URL并处理失败
-    function attemptToOpenUrl(url, name) {
-        // 优先尝试使用外部浏览器打开
-        if (typeof plus !== 'undefined' && plus.runtime) {
-            // uni-app环境
-            plus.runtime.openURL(url, function(res) {
-                if (res) {
-                    console.log('成功调用外部浏览器');
-                } else {
-                    showOpenFailedDialog(url, name);
-                }
-            });
-        } else {
-            // 普通网页环境
-            const a = document.createElement('a');
-            a.href = url;
-            a.target = '_blank';
-            
-            const openTime = Date.now();
-            
-            try {
-                window.open(url, '_blank');
+        
+        // 弹窗内容
+        popup.innerHTML = `
+            <div style="
+                background: white;
+                padding: 24px 18px;
+                border-radius: 12px;
+                width: 100%;
+                max-width: 90%;
+                text-align: center;
+                box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+                position: relative;
+            ">
+                <button id="pake-close-btn" style="
+                    position: absolute;
+                    top: 8px;
+                    right: 8px;
+                    background: transparent;
+                    border: none;
+                    font-size: 28px;
+                    color: #9ca3af;
+                    cursor: pointer;
+                    padding: 8px;
+                    width: 44px;
+                    height: 44px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 10;
+                ">
+                    ×
+                </button>
                 
-                setTimeout(() => {
-                    if (Date.now() - openTime < 500) {
-                        showOpenFailedDialog(url, name);
-                    }
-                }, 500);
-            } catch (e) {
-                showOpenFailedDialog(url, name);
+                <div style="margin: 24px 0 20px;">
+                    <div style="
+                        background: #f3f4f6;
+                        padding: 12px 16px;
+                        border-radius: 8px;
+                        margin-bottom: 16px;
+                        overflow: hidden;
+                    ">
+                        <input type="text" readonly 
+                               value="${BUY_URL}" 
+                               style="
+                                   width: 100%; 
+                                   font-size: 14px; 
+                                   border: none;
+                                   background: transparent;
+                                   outline: none;
+                                   text-align: center;
+                                   word-break: break-all;
+                               "
+                               id="pake-url-input">
+                    </div>
+                    <button id="pake-copy-btn" style="
+                        background: #48bb78;
+                        color: white;
+                        border: none;
+                        padding: 12px 16px;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-size: 16px;
+                        width: 100%;
+                        font-weight: 500;
+                        box-shadow: 0 4px 6px -1px rgba(72, 187, 120, 0.4);
+                    ">
+                        复制购买链接
+                    </button>
+                </div>
+                <button id="pake-open-btn" style="
+                    background: #3b82f6;
+                    color: white;
+                    border: none;
+                    padding: 14px 16px;
+                    font-size: 18px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    width: 100%;
+                    font-weight: 600;
+                    box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.4);
+                ">
+                    立即前往购买
+                </button>
+                
+                <!-- 激活卡密按钮 -->
+                <button id="pake-activate-btn" style="
+                    background: transparent;
+                    border: none;
+                    color: #8b5cf6;
+                    font-size: 16px;
+                    cursor: pointer;
+                    padding: 8px 0;
+                    margin: 12px 0;
+                    font-weight: 500;
+                    text-decoration: underline;
+                ">
+                    已购买？点击此处激活卡密
+                </button>
+                
+                <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
+                    点击上方按钮获取卡密激活软件 
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(popup);
+        
+        // 关闭弹窗函数
+        function closePopup() {
+            popup.style.opacity = '0';
+            setTimeout(() => {
+                if (document.body.contains(popup)) {
+                    document.body.removeChild(popup);
+                }
+            }, 300);
+        }
+        
+        // 关闭按钮功能
+        const closeBtn = popup.querySelector('#pake-close-btn');
+        closeBtn.addEventListener('click', () => {
+            closePopup();
+            incrementPopupCount(); // 记录关闭操作
+        });
+        
+        // 复制功能
+        const copyBtn = popup.querySelector('#pake-copy-btn');
+        const urlInput = popup.querySelector('#pake-url-input');
+        copyBtn.addEventListener('click', () => {
+            urlInput.select();
+            
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(BUY_URL)
+                    .then(() => showToast('链接已复制到剪贴板'))
+                    .catch(err => {
+                        console.error('复制失败:', err);
+                        showToast('复制失败，请手动复制');
+                    });
+            } else {
+                const successful = document.execCommand('copy');
+                showToast(successful ? '链接已复制到剪贴板' : '复制失败，请手动复制');
+            }
+            
+            copyBtn.style.backgroundColor = '#10b981';
+            setTimeout(() => {
+                copyBtn.style.backgroundColor = '#48bb78';
+            }, 300);
+        });
+        
+        // 购买按钮点击（外部浏览器打开）
+        const openBtn = popup.querySelector('#pake-open-btn');
+        openBtn.addEventListener('click', () => {
+            openExternalUrl(BUY_URL);
+            openBtn.style.backgroundColor = '#2563eb';
+            setTimeout(() => {
+                openBtn.style.backgroundColor = '#3b82f6';
+            }, 300);
+            incrementPopupCount(); // 记录购买操作
+        });
+        
+        // 激活卡密按钮点击（关闭弹窗+当前页跳转）
+        const activateBtn = popup.querySelector('#pake-activate-btn');
+        activateBtn.addEventListener('click', () => {
+            closePopup();
+            setTimeout(() => {
+                window.location.href = ACTIVATE_URL;
+            }, 300);
+            
+            activateBtn.style.opacity = '0.7';
+            setTimeout(() => {
+                activateBtn.style.opacity = '1';
+            }, 300);
+            incrementPopupCount(); // 记录激活操作
+        });
+        
+        // 外部链接打开函数
+        function openExternalUrl(url) {
+            if (window.__TAURI__) {
+                window.__TAURI__.shell.open(url).catch(err => {
+                    console.error('TAURI打开失败:', err);
+                    fallbackOpen(url);
+                });
+            } else if (window.android && typeof window.android.openUrl === 'function') {
+                try {
+                    window.android.openUrl(url);
+                } catch (err) {
+                    console.error('Android打开失败:', err);
+                    fallbackOpen(url);
+                }
+            } else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.openUrl) {
+                try {
+                    window.webkit.messageHandlers.openUrl.postMessage(url);
+                } catch (err) {
+                    console.error('iOS打开失败:', err);
+                    fallbackOpen(url);
+                }
+            } else {
+                fallbackOpen(url);
             }
         }
-    }
-
-    // 显示打开失败对话框
-    function showOpenFailedDialog(url, name) {
-        // 创建遮罩层
-        const overlay = document.createElement('div');
-        overlay.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.7);
-            z-index: 10001;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        `;
-
-        // 创建对话框
-        const dialog = document.createElement('div');
-        dialog.style.cssText = `
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            width: 80%;
-            max-width: 300px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-        `;
-
-        // 标题
-        const title = document.createElement('div');
-        title.style.cssText = `
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 15px;
-            text-align: center;
-        `;
-        title.textContent = `无法打开"${name}"`;
-
-        // 消息
-        const message = document.createElement('div');
-        message.style.cssText = `
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 20px;
-            text-align: center;
-        `;
-        message.textContent = '浏览器可能阻止了自动跳转。请手动复制链接到浏览器中打开。';
-
-        // 链接显示区域
-        const urlDisplay = document.createElement('div');
-        urlDisplay.style.cssText = `
-            background: #f5f5f5;
-            padding: 10px;
-            border-radius: 5px;
-            font-size: 13px;
-            margin-bottom: 20px;
-            word-break: break-all;
-            max-height: 100px;
-            overflow-y: auto;
-        `;
-        urlDisplay.textContent = url;
-
-        // 按钮容器
-        const buttonContainer = document.createElement('div');
-        buttonContainer.style.cssText = `
-            display: flex;
-            justify-content: space-between;
-        `;
-
-        // 复制按钮
-        const copyBtn = document.createElement('button');
-        copyBtn.style.cssText = `
-            background: #2c3e50;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-        `;
-        copyBtn.textContent = '复制链接';
-        copyBtn.addEventListener('click', () => {
-            copyToClipboard(url);
-            showToast('链接已复制到剪贴板');
-            document.body.removeChild(overlay);
-        });
-
-        // 取消按钮
-        const cancelBtn = document.createElement('button');
-        cancelBtn.style.cssText = `
-            background: #eee;
-            color: #333;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-        `;
-        cancelBtn.textContent = '取消';
-        cancelBtn.addEventListener('click', () => {
-            document.body.removeChild(overlay);
-        });
-
-        buttonContainer.appendChild(copyBtn);
-        buttonContainer.appendChild(cancelBtn);
-
-        dialog.appendChild(title);
-        dialog.appendChild(message);
-        dialog.appendChild(urlDisplay);
-        dialog.appendChild(buttonContainer);
-        overlay.appendChild(dialog);
-        document.body.appendChild(overlay);
-    }
-
-    // 复制文本到剪贴板
-    function copyToClipboard(text) {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-    }
-
-    // 显示提示消息
-    function showToast(message) {
-        const toast = document.createElement('div');
-        toast.style.cssText = `
-            position: fixed;
-            bottom: 50px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.7);
-            color: white;
-            padding: 10px 15px;
-            border-radius: 5px;
-            z-index: 10002;
-            font-size: 14px;
-            opacity: 0;
-            transition: opacity 0.3s;
-        `;
-        toast.textContent = message;
-        document.body.appendChild(toast);
         
-        // 显示动画
-        setTimeout(() => {
-            toast.style.opacity = '1';
-        }, 10);
-        
-        // 自动消失
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            setTimeout(() => {
-                document.body.removeChild(toast);
-            }, 300);
-        }, 2000);
-    }
-
-    // 初始化
-    function init() {
-        const toolbar = document.createElement('div');
-        toolbar.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            z-index: 9999;
-        `;
-
-        toolbar.appendChild(createButton('←', '后退', () => window.history.back()));
-        toolbar.appendChild(createButton('⌂', '主页', () => {
-            window.location.href = CUSTOM_HOME_URL;
-        }));
-        toolbar.appendChild(createButton('→', '前进', () => window.history.forward()));
-        toolbar.appendChild(createButton('☰', '菜单', toggleMenu));
-
-        document.body.appendChild(toolbar);
-        document.body.appendChild(createMenu());
-        
-        // 暴露API供外部调用
-        window.MobileNavigator = {
-            openUrl: function(url, name) {
-                attemptToOpenUrl(url, name || '链接');
-            },
-            showMenu: toggleMenu,
-            copyUrl: function(url, name) {
-                copyToClipboard(url);
-                showToast(`已复制"${name || '链接'}"`);
+        // 外部链接打开降级方案
+        function fallbackOpen(url) {
+            try {
+                const newWindow = window.open(url, '_blank');
+                if (newWindow) newWindow.focus();
+                else window.location.href = url;
+            } catch (err) {
+                console.error('打开失败:', err);
+                showToast('无法打开链接，请手动复制');
             }
-        };
+        }
+        
+        // 提示信息函数
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed;
+                bottom: 40px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0,0,0,0.8);
+                color: white;
+                padding: 10px 16px;
+                border-radius: 8px;
+                font-size: 14px;
+                z-index: 9999999;
+                opacity: 0;
+                transition: opacity 0.3s;
+            `;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => toast.style.opacity = '1', 10);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => document.body.removeChild(toast), 300);
+            }, 2000);
+        }
+        
+        // 增加弹窗计数
+        function incrementPopupCount() {
+            popupCount++;
+            sessionStorage.setItem(STORAGE_KEY, popupCount.toString());
+            console.log(`弹窗计数已更新为 ${popupCount}/${POPUP_LIMIT}`);
+        }
+        
+        // 触摸反馈
+        [copyBtn, openBtn, closeBtn, activateBtn].forEach(element => {
+            element.addEventListener('touchstart', () => {
+                element.style.transform = 'scale(0.95)';
+                element.style.opacity = '0.8';
+            });
+            element.addEventListener('touchend', () => {
+                element.style.transform = 'scale(1)';
+                element.style.opacity = '1';
+            });
+        });
     }
-
-    document.addEventListener('DOMContentLoaded', init);
+    
+    // 页面加载完成后在首页显示弹窗
+    if (isTargetHomepage) {
+        // 显示弹窗前先增加计数
+        console.log(`显示弹窗 ${popupCount + 1}/${POPUP_LIMIT}`);
+        
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            createAuthPopup();
+        } else {
+            window.addEventListener('load', createAuthPopup);
+        }
+        
+        // 更新计数（无论用户是否操作，只要显示就算一次）
+        incrementPopupCount();
+    }
 })();
